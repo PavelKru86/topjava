@@ -15,6 +15,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Objects;
 
 public class MealServlet extends HttpServlet {
@@ -24,6 +25,11 @@ public class MealServlet extends HttpServlet {
 
     @Override
     public void init(ServletConfig config) throws ServletException {
+        try (ConfigurableApplicationContext appCtx = new ClassPathXmlApplicationContext("spring/spring-app.xml")) {
+            System.out.println("Bean definition names: " + Arrays.toString(appCtx.getBeanDefinitionNames()));
+            AdminRestController adminUserController = appCtx.getBean(AdminRestController.class);
+            adminUserController.create(new User(null, "userName", "email@mail.ru", "password", Role.ROLE_ADMIN));
+        }
         super.init(config);
         repository = new InMemoryMealRepositoryImpl();
     }
