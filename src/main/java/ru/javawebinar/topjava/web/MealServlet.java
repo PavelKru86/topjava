@@ -18,40 +18,60 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Objects;
 
-public class MealServlet extends HttpServlet {
-    private static final Logger log = LoggerFactory.getLogger(MealServlet.class);
+import static ru.javawebinar.topjava.util.DateTimeUtil.parseLocalDate;
+import static ru.javawebinar.topjava.util.DateTimeUtil.parseLocalTime;
 
-    private MealRepository repository;
+public class MealServlet extends HttpServlet {
+
+    private ConfigurableApplicationContext springContext;
+    private MealRestController mealController;
 
     @Override
     public void init(ServletConfig config) throws ServletException {
-        try (ConfigurableApplicationContext appCtx = new ClassPathXmlApplicationContext("spring/spring-app.xml")) {
-            System.out.println("Bean definition names: " + Arrays.toString(appCtx.getBeanDefinitionNames()));
-            AdminRestController adminUserController = appCtx.getBean(AdminRestController.class);
-            adminUserController.create(new User(null, "userName", "email@mail.ru", "password", Role.ROLE_ADMIN));
-        }
+
         super.init(config);
-        repository = new InMemoryMealRepositoryImpl();
+        springContext = new ClassPathXmlApplicationContext("spring/spring-app.xml");
+        mealController = springContext.getBean(MealRestController.class);
+    }
+
+    @Override
+    public void destroy() {
+        springContext.close();
+        super.destroy();
     }
 
     @Override
     protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
         request.setCharacterEncoding("UTF-8");
-        String id = request.getParameter("id");
+        String action = request.getParameter("action");
+        if (action == null) {
+            Meal meal = new Meal(
+                    LocalDateTime.parse(request.getParameter("dateTime")),
+                    request.getParameter("description"),
+                    Integer.parseInt(request.getParameter("calories")));
 
-        Meal meal = new Meal(id.isEmpty() ? null : Integer.valueOf(id),
-                LocalDateTime.parse(request.getParameter("dateTime")),
-                request.getParameter("description"),
-                Integer.parseInt(request.getParameter("calories")));
+            if (request.getParameter("id").isEmpty()) {
+                mealController.create(meal);
+            } else {
+                mealController.update(meal, getId(request));
+            }
+            response.sendRedirect("meals");
 
-        log.info(meal.isNew() ? "Create {}" : "Update {}", meal);
-        repository.save(meal, SecurityUtil.authUserId());
-        response.sendRedirect("meals");
+        } else if ("filter".equals(action)) {
+            LocalDate startDate = parseLocalDate(request.getParameter("startDate"));
+            LocalDate endDate = parseLocalDate(request.getParameter("endDate"));
+            LocalTime startTime = parseLocalTime(request.getParameter("startTime"));
+            LocalTime endTime = parseLocalTime(request.getParameter("endTime"));
+            request.setAttribute("meals", mealController.getBetween(startDate, startTime, endDate, endTime));
+            request.getRequestDispatcher("/meals.jsp").forward(request, response);
+        }
     }
 
     @Override
